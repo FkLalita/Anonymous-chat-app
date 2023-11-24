@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anonymous Chat</title>
+<style>
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #000;
+            color: #00ff00; /* Green text */
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        header {
+            background-color: #333;
+            color: #fff;
+            padding: 10px;
+            text-align: center;
+        }
+
+        #chat-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        #chat {
+            flex: 3;
+            padding: 20px;
+            overflow-y: auto;
+            background-color: #000;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        #user-list {
+            flex: 1;
+            padding: 20px;
+            background-color: #333;
+            color: #00ff00;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        #message-input {
+            padding: 10px;
+            margin-top: 10px;
+            width: 100%;
+            background-color: #000;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+        }
+
+        #send-button {
+            padding: 10px;
+            margin-top: 10px;
+            background-color: #00ff00;
+            color: #000;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Anonymous Chat</h1>
+    </header>
+    <div id="chat-container">
+        <div id="chat"></div>
+        <div id="user-list"></div>
+    </div>
+    <input type="text" id="message-input" placeholder="Type a message">
+    <button id="send-button" onclick="sendMessage()">Send</button>
+
+    <script>
+        const socket = new WebSocket("ws://localhost:8000/ws");
+
+        socket.addEventListener("message", (event) => {
+            console.log("Received message:", event.data);
+
+            const data = JSON.parse(event.data);
+            const chatDiv = document.getElementById("chat");
+            const userListDiv = document.getElementById("user-list");
+
+            if (data.type === "mainChat") {
+                const message = document.createElement("p");
+                message.textContent = data.content;
+                chatDiv.appendChild(message);
+            } else if (data.type === "userList") {
+                userListDiv.innerHTML = "";
+                data.users.forEach(user => {
+                    const listItem = document.createElement("div");
+                    listItem.textContent = user;
+                    userListDiv.appendChild(listItem);
+                });
+            }
+        });
+
+        function sendMessage() {
+            const messageInput = document.getElementById("message-input");
+            const message = messageInput.value;
+
+            if (message.trim() !== "") {
+                socket.send(JSON.stringify({
+                    type: "mainChat",
+                    content: message
+                }));
+
+                messageInput.value = "";
+            }
+        }
+
+        const sendButton = document.getElementById("send-button");
+        sendButton.addEventListener("click", sendMessage);
+    </script>
+  </body>
+</html>
+

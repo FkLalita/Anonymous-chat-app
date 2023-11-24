@@ -1,8 +1,7 @@
-// websocket.go
-
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -47,31 +46,7 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	// Prompt user for a username
-	err = conn.WriteMessage(websocket.TextMessage, []byte("Please enter your username"))
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	// Receive username from client
-	_, username, err := conn.ReadMessage()
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	client := &User{
-		Conn:     conn,
-		Username: string(username),
-	}
-
-	clientsLock.Lock()
-	clients[conn] = client
-	userCounter++
-	clientsLock.Unlock()
-
-	broadcastUserList()
+	requestUsername(conn)
 
 	for {
 		messageType, p, err := conn.ReadMessage()
@@ -82,16 +57,53 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
 
 		if messageType == websocket.TextMessage {
 			message := string(p)
-			handleMessage(client, message)
+			handleMessage(conn, message)
 		}
 	}
 
 	clientsLock.Lock()
 	delete(clients, conn)
-	userCounter--
 	clientsLock.Unlock()
 
 	broadcastUserList()
+}
+
+func requestUsername(conn *websocket.Conn) {
+	message := Message{
+		Type: "requestUsername",
+	}
+
+	err := conn.WriteJSON(message)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	_, p, err := conn.ReadMessage()
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	var usernameMessage Message
+	err = json.Unmarshal(p, &usernameMessage)
+	if err != nil {
+		log.Println("Error decoding username message:", err)
+		return
+	}
+
+	if usernameMessage.Type == "username" {
+		client := &User{
+			Conn:     conn,
+			Username: usernameMessage.Content,
+		}
+
+		clientsLock.Lock()
+		clients[conn] = client
+		clientsLock.Unlock()
+
+		broadcastUserList()
+	}
 }
 
 func broadcastUserList() {
@@ -116,17 +128,38 @@ func broadcast(msg Message) {
 	defer clientsLock.Unlock()
 
 	for client := range clients {
-		err := client.WriteJSON(msg)
-		if err != nil {
-			log.Println(err)
-			client.Close()
-			delete(clients, client)
-			userCounter--
+		if msg.Type == "mainChat" {
+			// Send the content directly without wrapping it in another JSON object
+			err := client.WriteJSON(msg.Content)
+			if err != nil {
+				log.Println(err)
+				client.Close()
+				delete(clients, client)
+				userCounter--
+			}
+		} else {
+			// For other message types, send the entire message as before
+			err := client.WriteJSON(msg)
+			if err != nil {
+				log.Println(err)
+				client.Close()
+				delete(clients, client)
+				userCounter--
+			}
 		}
 	}
 }
 
-func handleMessage(sender *User, message string) {
+func handleMessage(conn *websocket.Conn, message string) {
+	clientsLock.Lock()
+	sender, ok := clients[conn]
+	clientsLock.Unlock()
+
+	if !ok {
+		log.Println("Sender not found")
+		return
+	}
+
 	msg := Message{
 		Type:    "mainChat",
 		Content: fmt.Sprintf("%s: %s", sender.Username, message),

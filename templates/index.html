@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -75,47 +76,79 @@
     <input type="text" id="message-input" placeholder="Type a message">
     <button id="send-button" onclick="sendMessage()">Send</button>
 
-    <script>
-        const socket = new WebSocket("ws://localhost:8000/ws");
+<script>
+    const socket = new WebSocket("ws://localhost:8000/ws");
 
-        socket.addEventListener("message", (event) => {
-            console.log("Received message:", event.data);
+    socket.addEventListener("message", (event) => {
+        console.log("Received message:", event.data);
 
+        try {
             const data = JSON.parse(event.data);
-            const chatDiv = document.getElementById("chat");
-            const userListDiv = document.getElementById("user-list");
 
-            if (data.type === "mainChat") {
-                const message = document.createElement("p");
-                message.textContent = data.content;
-                chatDiv.appendChild(message);
-            } else if (data.type === "userList") {
-                userListDiv.innerHTML = "";
-                data.users.forEach(user => {
-                    const listItem = document.createElement("div");
-                    listItem.textContent = user;
-                    userListDiv.appendChild(listItem);
-                });
+            switch (data.type) {
+                case "requestUsername":
+                    handleUsernameRequest();
+                    break;
+                case "mainChat":
+                    handleMainChatMessage(data);
+                    break;
+                case "userList":
+                    handleUserListMessage(data);
+                    break;
+                // Add more cases for other message types as needed
+                default:
+                    console.error("Unknown message type:", data.type);
             }
-        });
-
-        function sendMessage() {
-            const messageInput = document.getElementById("message-input");
-            const message = messageInput.value;
-
-            if (message.trim() !== "") {
-                socket.send(JSON.stringify({
-                    type: "mainChat",
-                    content: message
-                }));
-
-                messageInput.value = "";
-            }
+        } catch (error) {
+            console.error("Error parsing JSON:", error);
         }
+    });
 
-        const sendButton = document.getElementById("send-button");
-        sendButton.addEventListener("click", sendMessage);
-    </script>
-  </body>
+    function handleUsernameRequest() {
+        const username = prompt("Please enter your username");
+        if (username) {
+            socket.send(JSON.stringify({
+                type: "username",
+                content: username
+            }));
+        }
+    }
+
+    function handleMainChatMessage(data) {
+        const chatDiv = document.getElementById("chat");
+        const message = document.createElement("p");
+        message.textContent = JSON.parse(data.content).content; // Parse the 'content' property
+        chatDiv.appendChild(message);
+    }
+           
+
+    function handleUserListMessage(data) {
+        const userListDiv = document.getElementById("user-list");
+        userListDiv.innerHTML = "";
+        data.users.forEach(user => {
+            const listItem = document.createElement("div");
+            listItem.textContent = user;
+            userListDiv.appendChild(listItem);
+        });
+    }
+
+    function sendMessage() {
+        const messageInput = document.getElementById("message-input");
+        const message = messageInput.value.trim();
+
+        if (message !== "") {
+            socket.send(JSON.stringify({
+                type: "mainChat",
+                content: message
+            }));
+
+            messageInput.value = "";
+        }
+    }
+
+    const sendButton = document.getElementById("send-button");
+    sendButton.addEventListener("click", sendMessage);
+</script>
+    
+</body>
 </html>
-
